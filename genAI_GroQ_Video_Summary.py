@@ -9,7 +9,7 @@ frames_directory = 'frames/'
 # Initialize Groq model
 model = ChatGroq(
     groq_api_key=st.secrets["GROQ_API_KEY"],
-    model_name="mistral-saba-24b8"  # You can also use llama3-70b or gemma
+    model_name="meta-llama/llama-4-scout-17b-16e-instruct"  # You can also use llama3-70b or gemma
 )
 
 def upload_video(file):
