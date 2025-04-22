@@ -6,3 +6,4 @@ langchain_ollama
 opencv-python-headless
 langchain-groq
 groq
+pytube
