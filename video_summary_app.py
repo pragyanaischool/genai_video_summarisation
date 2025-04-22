@@ -1,21 +1,32 @@
 import os
-
 import cv2
 import streamlit as st
+import httpx
 from langchain_ollama.llms import OllamaLLM
 
 videos_directory = 'videos/'
 frames_directory = 'frames/'
 
-model = OllamaLLM(model="gemma3:27b")
+# Make sure Ollama is running at this URL
+OLLAMA_BASE_URL = "http://localhost:11434"
+
+# Initialize model
+model = OllamaLLM(model="gemma3:27b", base_url=OLLAMA_BASE_URL)
+
+def check_ollama_server():
+    try:
+        response = httpx.get(OLLAMA_BASE_URL)
+        return response.status_code == 200
+    except httpx.ConnectError:
+        return False
 
 def upload_video(file):
-    with open(videos_directory + file.name, "wb") as f:
+    with open(os.path.join(videos_directory, file.name), "wb") as f:
         f.write(file.getbuffer())
 
 def extract_frames(video_path, interval_seconds=5):
     for file in os.listdir(frames_directory):
-        os.remove(frames_directory + file)
+        os.remove(os.path.join(frames_directory, file))
 
     video = cv2.VideoCapture(video_path)
 
@@ -30,9 +41,10 @@ def extract_frames(video_path, interval_seconds=5):
         success, frame = video.read()
 
         if not success:
+            current_frame += fps * interval_seconds
             continue
 
-        frame_path = frames_directory + f"frame_{frame_number:03d}.jpg"
+        frame_path = os.path.join(frames_directory, f"frame_{frame_number:03d}.jpg")
         cv2.imwrite(frame_path, frame)
 
         current_frame += fps * interval_seconds
@@ -41,13 +53,16 @@ def extract_frames(video_path, interval_seconds=5):
     video.release()
 
 def describe_video():
-    images = []
-
-    for file in os.listdir(frames_directory):
-        images.append(frames_directory + file)
+    images = [
+        os.path.join(frames_directory, file)
+        for file in sorted(os.listdir(frames_directory))
+    ]
 
     model_with_images = model.bind(images=images)
     return model_with_images.invoke("Summarize the video content in a few sentences.")
+
+# Streamlit interface
+st.title("🎥 AI Video Summarizer")
 
 uploaded_file = st.file_uploader(
     "Upload Video",
@@ -56,8 +71,13 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file:
-    upload_video(uploaded_file)
-    extract_frames(videos_directory + uploaded_file.name)
-    summary = describe_video()
+    if not check_ollama_server():
+        st.error("❌ Cannot connect to Ollama server at `localhost:11434`. Please start it with `ollama serve`.")
+    else:
+        with st.spinner("Processing video..."):
+            upload_video(uploaded_file)
+            extract_frames(os.path.join(videos_directory, uploaded_file.name))
+            summary = describe_video()
 
-    st.markdown(summary)
+        st.markdown("### 📝 Summary:")
+        st.markdown(summary)
